@@ -1,0 +1,48 @@
+{
+  "lockSchema": 1,
+  "recipe": 1,
+  "upstream": {
+    "repository": "https://github.com/xmrig/xmrig.git",
+    "version": "6.26.0",
+    "tag": "v6.26.0",
+    "commit": "b2ca72480c58d197e18c885d9fc1a0c8d517e60a",
+    "tree": "2748628023ae1aead27f41cb8693fac1ae592421",
+    "signingKeyPath": "keys/xmrig-signing-key.asc",
+    "signingKeySha256": "e028645ffa96aa8d159ef61cd6ea68163e855007c21109f6d5214c1b3af9b63c",
+    "signingFingerprint": "9AC4CEA8E66E35A5C7CDDC1B446A53638BE94409"
+  },
+  "dependencies": {
+    "repository": "https://github.com/xmrig/xmrig-deps.git",
+    "commit": "ddfb65ec8bf4803a6c1c2037969546d018c76b54",
+    "tree": "39a743c4094037e4b1f50ce0d69b82f9678637c8",
+    "relativePath": "msvc2022/x64"
+  },
+  "patch": {
+    "path": "patches/donation-zero.patch",
+    "sha256": "3c1a7a90fe62221f812e6f1b4a562d849d315c746177b88703bee812aea47c3d",
+    "patchedDonateHeaderSha256": "02a4f4b478eb7a7e57c74049945359799d789d00ea19a3ed18d3751113069253",
+    "expectedReplacements": 2
+  },
+  "toolchain": {
+    "runnerImage": "windows-2022",
+    "runnerEnvironment": "github-hosted",
+    "generator": "Visual Studio 17 2022",
+    "architecture": "x64",
+    "configuration": "Release",
+    "cmakeVersion": "3.31.6",
+    "visualStudioProductLine": "17.14",
+    "msvcToolsVersion": "14.44.35207",
+    "windowsSdkVersion": "10.0.26100.0"
+  },
+  "driver": {
+    "relativePath": "bin/WinRing0/WinRing0x64.sys",
+    "authenticodeSubject": "E=hiyohiyo@crystalmark.info, CN=Noriyuki MIYAZAKI, C=JP",
+    "authenticodeThumbprint": "CDA98AC4019456095593902E4B4A87AC283ED54A"
+  },
+  "actions": {
+    "checkout": "11d5960a326750d5838078e36cf38b85af677262",
+    "uploadArtifact": "ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "downloadArtifact": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
+    "attestBuildProvenance": "96b4a1ef7235a096b17240c259729fdd70c83d45"
+  }
+}

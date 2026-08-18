@@ -1,0 +1,131 @@
+name: verify-build-attest-release
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.repository }}-xmrig-nodonate-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check-upstream:
+    runs-on: windows-2022
+    outputs:
+      latest: ${{ steps.resolve.outputs.latest }}
+      requires_review: ${{ steps.resolve.outputs.requires_review }}
+      should_build: ${{ steps.resolve.outputs.should_build }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - id: resolve
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .\scripts\Resolve-Upstream.ps1
+
+  review-required:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.requires_review == 'true'
+    runs-on: windows-2022
+    steps:
+      - shell: powershell
+        run: |
+          Write-Error "XMRig ${{ needs.check-upstream.outputs.latest }} is newer than the reviewed build lock. Verify its signed commit, update all pins, and increment the recipe if policy inputs changed."
+
+  test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - shell: powershell
+        run: .\scripts\Test-Repository.ps1
+
+  heartbeat:
+    needs: check-upstream
+    if: github.event_name == 'schedule'
+    permissions:
+      contents: write
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+      - id: heartbeat
+        shell: powershell
+        run: .\scripts\Update-UpstreamState.ps1 -LatestVersion '${{ needs.check-upstream.outputs.latest }}'
+      - if: steps.heartbeat.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- upstream-state.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m 'chore: record upstream heartbeat'
+            git push origin HEAD:main
+          }
+
+  build:
+    needs: [check-upstream, test]
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - shell: powershell
+        run: .\scripts\Invoke-VerifiedBuild.ps1 -OutputDirectory (Join-Path $env:RUNNER_TEMP 'release-assets') -WorkDirectory (Join-Path $env:RUNNER_TEMP 'verified-build')
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-release-assets
+          path: ${{ runner.temp }}/release-assets/*
+          if-no-files-found: error
+          retention-days: 1
+
+  attest-and-publish:
+    needs: [check-upstream, build]
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: verified-release-assets
+          path: ${{ runner.temp }}/release-assets
+      - id: subject
+        shell: powershell
+        run: |
+          $runtime = @(Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP 'release-assets') -Filter 'xmrig-*-windows-x64-nodonate-r*.zip' -File)
+          if ($runtime.Count -ne 1) { throw 'Runtime attestation subject is missing or ambiguous.' }
+          ('path=' + $runtime[0].FullName) | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding UTF8
+          ('name=' + $runtime[0].Name) | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding UTF8
+      - id: attest
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
+        with:
+          subject-path: ${{ steps.subject.outputs.path }}
+      - shell: powershell
+        run: |
+          $assets = Join-Path $env:RUNNER_TEMP 'release-assets'
+          Copy-Item -LiteralPath '${{ steps.attest.outputs.bundle-path }}' -Destination (Join-Path $assets ('${{ steps.subject.outputs.name }}' + '.sigstore.json'))
+          $lines = @(Get-ChildItem -LiteralPath $assets -File | Sort-Object Name | ForEach-Object {
+            (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + ' *' + $_.Name
+          })
+          [IO.File]::WriteAllLines((Join-Path $assets 'SHA256SUMS'), $lines, (New-Object Text.UTF8Encoding($false)))
+      - shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\Publish-DraftRelease.ps1 -AssetDirectory (Join-Path $env:RUNNER_TEMP 'release-assets') -Tag '${{ needs.check-upstream.outputs.tag }}' -Repository $env:GITHUB_REPOSITORY -TargetCommit $env:GITHUB_SHA

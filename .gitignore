@@ -1,0 +1,11 @@
+/out/
+/work/
+/test-results/
+*.zip
+*.exe
+*.sys
+*.pdb
+*.obj
+*.user
+.env*
+
