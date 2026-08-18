@@ -12,8 +12,7 @@ $headers=@{'Accept'='application/vnd.github+json';'User-Agent'='xmrig-nodonate-b
 # can return an empty/404 response for cross-repository public API calls.
 # Anonymous access is sufficient for this single public release listing and
 # avoids coupling upstream discovery to token scope.
-$releases=@(Invoke-RestMethod -Uri 'https://api.github.com/repos/xmrig/xmrig/releases?per_page=100&page=1' -Headers $headers -TimeoutSec 30)
-if ($releases.Count -gt 100){throw 'Official release response exceeded the pagination bound.'}
+$releases=@(Invoke-RestMethod -Uri 'https://api.github.com/repos/xmrig/xmrig/releases/latest' -Headers $headers -TimeoutSec 30)
 $stable=@()
 $seen=@{}
 foreach($release in $releases){
