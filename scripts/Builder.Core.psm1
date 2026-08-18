@@ -6,6 +6,26 @@ function Quote-XnbArgument {
     return '"' + ($Value -replace '(\\*)"','$1$1\"' -replace '(\\+)$','$1$1') + '"'
 }
 
+function Get-XnbGnuPgHome {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$WindowsPath,
+        [Parameter(Mandatory=$true)][string]$GpgPath
+    )
+    $full=[IO.Path]::GetFullPath($WindowsPath)
+    # Git for Windows ships an MSYS gpg that treats a drive-letter GNUPGHOME as
+    # relative to the current Unix cwd, producing a concatenated path that does
+    # not exist. Native GnuPG wants the Windows path unchanged.
+    if ([string]$GpgPath -match '(?i)\\Git\\(?:usr\\)?bin\\gpg(?:\.exe)?$') {
+        foreach ($candidate in @($WindowsPath,$full)) {
+            if ($candidate -match '^(?<drive>[A-Za-z]):\\(?<rest>.*)$') {
+                return '/' + $Matches.drive.ToLowerInvariant() + '/' + $Matches.rest.Replace('\','/')
+            }
+        }
+    }
+    return $full
+}
+
 function Invoke-XnbCommand {
     [CmdletBinding()]
     param(

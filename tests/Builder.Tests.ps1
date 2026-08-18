@@ -99,6 +99,11 @@ Describe 'xmrig-nodonate-builder policy' {
         $script | Should Not Match '2>\$null'
     }
 
+    It 'converts Git-for-Windows gpg homedirs to MSYS paths' {
+        (Get-XnbGnuPgHome -WindowsPath 'D:\a\_temp\verified-build\gnupg' -GpgPath 'C:\Program Files\Git\usr\bin\gpg.exe') | Should Be '/d/a/_temp/verified-build/gnupg'
+        (Get-XnbGnuPgHome -WindowsPath 'D:\a\_temp\verified-build\gnupg' -GpgPath 'C:\Program Files (x86)\GnuPG\bin\gpg.exe') | Should Be ([IO.Path]::GetFullPath('D:\a\_temp\verified-build\gnupg'))
+    }
+
     It 'pins every reused action by the exact full SHA in the lock' {
         $lock=[IO.File]::ReadAllText((Join-Path $root 'locks\build.lock.json'))|ConvertFrom-Json
         $workflow=[IO.File]::ReadAllText((Join-Path $root '.github\workflows\build-release.yml'))

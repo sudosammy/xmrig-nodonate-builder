@@ -33,12 +33,13 @@ $git=(Get-Command git.exe -ErrorAction Stop).Source
 $gpgCommand=Get-Command gpg.exe -ErrorAction SilentlyContinue
 if (-not $gpgCommand) {$gpgCommand=Get-Command gpg -ErrorAction Stop}
 $cmake=(Get-Command cmake.exe -ErrorAction Stop).Source
-$gpgEnvironment=@{GNUPGHOME=$gnupg}
+$gpgEnvironment=@{GNUPGHOME=(Get-XnbGnuPgHome -WindowsPath $gnupg -GpgPath $gpgCommand.Source)}
 
 $keyPath=Join-Path $root ([string]$lock.upstream.signingKeyPath).Replace('/','\')
 if ((Get-XnbSha256 $keyPath) -cne [string]$lock.upstream.signingKeySha256) {throw 'Pinned XMRig signing key hash mismatch.'}
-[void](Invoke-XnbCheckedCommand -FilePath $gpgCommand.Source -Arguments @('--batch','--import',$keyPath) -Environment $gpgEnvironment)
-$keyListing=Invoke-XnbCheckedCommand -FilePath $gpgCommand.Source -Arguments @('--batch','--with-colons','--fingerprint','--list-keys') -Environment $gpgEnvironment
+$gpgHome=@('--homedir',[string]$gpgEnvironment.GNUPGHOME)
+[void](Invoke-XnbCheckedCommand -FilePath $gpgCommand.Source -Arguments ($gpgHome+@('--batch','--import',$keyPath)) -Environment $gpgEnvironment)
+$keyListing=Invoke-XnbCheckedCommand -FilePath $gpgCommand.Source -Arguments ($gpgHome+@('--batch','--with-colons','--fingerprint','--list-keys')) -Environment $gpgEnvironment
 $fingerprints=@([regex]::Matches($keyListing.StdOut,'(?m)^fpr:::::::::([A-F0-9]{40}):$') | ForEach-Object {$_.Groups[1].Value})
 if ($fingerprints -notcontains ([string]$lock.upstream.signingFingerprint).ToUpperInvariant()) {throw 'Pinned XMRig signing fingerprint was not imported.'}
 
