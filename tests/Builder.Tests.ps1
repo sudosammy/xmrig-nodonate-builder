@@ -66,6 +66,39 @@ Describe 'xmrig-nodonate-builder policy' {
         @($manifest.runtime.files).Count|Should Be 4
     }
 
+    It 'selects the highest stable vX.Y.Z tag and ignores prerelease suffixes' {
+        $lsRemote=@(
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	refs/tags/v6.25.0',
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb	refs/tags/v6.26.0',
+            'cccccccccccccccccccccccccccccccccccccccc	refs/tags/v6.27.0-beta',
+            'dddddddddddddddddddddddddddddddddddddddd	refs/tags/v6.24.0'
+        ) -join "`n"
+        $versions=@(Get-XnbStableTagVersions $lsRemote)
+        $versions.Count | Should Be 3
+        @($versions | Where-Object {$_.Tag -eq 'v6.26.0'}).Count | Should Be 1
+        @($versions | Where-Object {$_.Tag -match '-'}).Count | Should Be 0
+        ($versions | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString() | Should Be '6.26.0'
+    }
+
+    It 'captures native-command failure without treating stderr as terminating' {
+        $cmd=Get-Command cmd.exe -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $result=Invoke-XnbCommand -FilePath $cmd.Source -Arguments @('/c','echo err 1>&2 & exit 7') -TimeoutSeconds 10
+        } else {
+            $sh=(Get-Command sh -ErrorAction Stop).Source
+            $result=Invoke-XnbCommand -FilePath $sh -Arguments @('-c','echo err 1>&2; exit 7') -TimeoutSeconds 10
+        }
+        $result.ExitCode | Should Be 7
+        $result.StdErr | Should Match 'err'
+    }
+
+    It 'resolves upstream over git and does not redirect native stderr' {
+        $script=[IO.File]::ReadAllText((Join-Path $root 'scripts\Resolve-Upstream.ps1'))
+        $script | Should Match ([regex]::Escape('ls-remote'))
+        $script | Should Not Match 'Invoke-RestMethod'
+        $script | Should Not Match '2>\$null'
+    }
+
     It 'pins every reused action by the exact full SHA in the lock' {
         $lock=[IO.File]::ReadAllText((Join-Path $root 'locks\build.lock.json'))|ConvertFrom-Json
         $workflow=[IO.File]::ReadAllText((Join-Path $root '.github\workflows\build-release.yml'))

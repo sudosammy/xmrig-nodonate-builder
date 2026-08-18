@@ -60,6 +60,23 @@ function Get-XnbSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Get-XnbStableTagVersions {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)][string]$LsRemoteOutput)
+    $stable=@()
+    $seen=@{}
+    foreach ($line in @($LsRemoteOutput -split "`r?`n")) {
+        if ($line -notmatch '^[0-9a-f]{40}\trefs/tags/(v\d+\.\d+\.\d+)$') { continue }
+        $tag=[string]$Matches[1]
+        $version=[Version]$tag.Substring(1)
+        $key=$version.ToString()
+        if ($seen.ContainsKey($key)) { throw "Duplicate official stable version: $version" }
+        $seen[$key]=$true
+        $stable+=[pscustomobject]@{Version=$version;Tag=$tag}
+    }
+    return $stable
+}
+
 function Test-XnbLock {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$Lock)
