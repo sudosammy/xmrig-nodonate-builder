@@ -7,7 +7,11 @@ if (-not $RepositoryRoot){$RepositoryRoot=Split-Path -Parent $scriptRoot}
 $root=[IO.Path]::GetFullPath($RepositoryRoot)
 $lock=[IO.File]::ReadAllText((Join-Path $root 'locks\build.lock.json')) | ConvertFrom-Json
 $headers=@{'Accept'='application/vnd.github+json';'User-Agent'='xmrig-nodonate-builder';'X-GitHub-Api-Version'='2022-11-28'}
-if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)){$headers['Authorization']='Bearer '+$env:GITHUB_TOKEN}
+# Do not send the repository-scoped Actions token to the public upstream
+# repository.  GITHUB_TOKEN is intentionally limited to this repository and
+# can return an empty/404 response for cross-repository public API calls.
+# Anonymous access is sufficient for this single public release listing and
+# avoids coupling upstream discovery to token scope.
 $releases=@(Invoke-RestMethod -Uri 'https://api.github.com/repos/xmrig/xmrig/releases?per_page=100&page=1' -Headers $headers -TimeoutSec 30)
 if ($releases.Count -gt 100){throw 'Official release response exceeded the pagination bound.'}
 $stable=@()
@@ -34,4 +38,3 @@ if($env:GITHUB_OUTPUT){
     @("latest=$($result.LatestVersion)","locked=$($result.LockedVersion)","requires_review=$($result.RequiresReview.ToString().ToLowerInvariant())","tag=$tag","should_build=$($result.ShouldBuild.ToString().ToLowerInvariant())") | Add-Content -LiteralPath $env:GITHUB_OUTPUT -Encoding UTF8
 }
 $result
-
